@@ -18,6 +18,14 @@ public class StoriesControllerIntegrationTests : IClassFixture<WebApplicationFac
         {
             builder.ConfigureServices(services =>
             {
+                // Remove background service to prevent conflicts during testing
+                var cacheRefreshServiceDescriptor = services.FirstOrDefault(
+                    d => d.ImplementationType?.Name == "CacheRefreshService");
+                if (cacheRefreshServiceDescriptor != null)
+                {
+                    services.Remove(cacheRefreshServiceDescriptor);
+                }
+
                 // Replace the DbContext with InMemory database
                 var descriptor = services.SingleOrDefault(
                     d => d.ServiceType == typeof(DbContextOptions<ApplicationDbContext>));

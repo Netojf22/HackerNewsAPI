@@ -19,6 +19,14 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
         {
             builder.ConfigureServices(services =>
             {
+                // Remove background service to prevent conflicts during testing
+                var cacheRefreshServiceDescriptor = services.FirstOrDefault(
+                    d => d.ImplementationType?.Name == "CacheRefreshService");
+                if (cacheRefreshServiceDescriptor != null)
+                {
+                    services.Remove(cacheRefreshServiceDescriptor);
+                }
+
                 // Replace the DbContext with InMemory database
                 var descriptor = services.SingleOrDefault(
                     d => d.ServiceType == typeof(DbContextOptions<ApplicationDbContext>));
@@ -244,13 +252,12 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
         context.Database.EnsureCreated();
 
         // Act
-        var stories = await context.Stories.ToListAsync();
+        var items = await context.Items.ToListAsync();
 
         // Assert
-        Assert.NotNull(stories);
-        Assert.Equal(3, stories.Count);
-        Assert.All(stories, s => Assert.NotNull(s.Title));
-        Assert.All(stories, s => Assert.True(s.Score >= 0));
+        Assert.NotNull(items);
+        Assert.All(items, i => Assert.NotNull(i.Title));
+        Assert.All(items, i => Assert.True(i.Score >= 0));
     }
 
     [Fact]

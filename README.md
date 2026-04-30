@@ -51,7 +51,7 @@ Or you can use:
 ### Step 1: Login to Get Your Token
 
 ```bash
-curl -X POST "http://localhost:5000/api/auth/login" \
+curl -X POST "http://localhost:5251/api/auth/login" \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"Test123!"}'
 ```
@@ -72,7 +72,7 @@ Now use that token to access the protected stories endpoint:
 
 ```bash
 curl -H "Authorization: Bearer YOUR_TOKEN_HERE" \
-  "http://localhost:5000/api/stories/best?count=5"
+  "http://localhost:5251/api/stories/best?count=5"
 ```
 
 ### Stories Endpoint
@@ -136,7 +136,37 @@ cd HackerNewsAPI
 dotnet run
 ```
 
-The API will be running at `https://localhost:5001` or `http://localhost:5000`.
+The API will be running at `http://localhost:5251`.
+
+## 🚀 Using Swagger UI
+
+The API includes Swagger UI for easy testing and documentation. Once the application is running, you can access it at:
+
+**Swagger UI**: `http://localhost:5251/swagger` (development)
+
+### How to Use Authentication in Swagger
+
+1. **Open Swagger UI**: Navigate to `http://localhost:5251/swagger`
+
+2. **Login to Get Token**:
+   - Expand the `POST /api/auth/login` endpoint
+   - Click "Try it out"
+   - Enter credentials:
+     - Username: `admin` or `user`
+     - Password: `Test123!`
+   - Click "Execute"
+   - Copy the `token` value from the response
+
+3. **Authorize Your Requests**:
+   - Click the **"Authorize"** button (top right corner)
+   - In the popup, enter your token in the format: `Bearer YOUR_JWT_TOKEN`
+   - Click "Authorize" to apply the token
+
+4. **Test Protected Endpoints**:
+   - Now you can use protected endpoints like `GET /api/stories/best`
+   - The authorization will be automatically included in all requests
+
+> **Note**: The JWT token expires after 1 hour. If you get a 401 Unauthorized error, simply repeat the login process to get a fresh token.
 
 🎉 **Quick Test**: If you see stories coming back after following the authentication steps above, you're all set!
 
@@ -241,23 +271,23 @@ dotnet test HackerNewsAPI.IntegrationTests
 
 ```bash
 # 1. Login to get a token
-TOKEN=$(curl -s -X POST "http://localhost:5000/api/auth/login" \
+TOKEN=$(curl -s -X POST "http://localhost:5251/api/auth/login" \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"Test123!"}' | \
   grep -o '"token":"[^"]*' | cut -d'"' -f4)
 
 # 2. Use the token to get stories (various counts)
-curl -H "Authorization: Bearer $TOKEN" "http://localhost:5000/api/stories/best?count=5"
-curl -H "Authorization: Bearer $TOKEN" "http://localhost:5000/api/stories/best"        # default 10
-curl -H "Authorization: Bearer $TOKEN" "http://localhost:5000/api/stories/best?count=100" # max 100
+curl -H "Authorization: Bearer $TOKEN" "http://localhost:5251/api/stories/best?count=5"
+curl -H "Authorization: Bearer $TOKEN" "http://localhost:5251/api/stories/best"        # default 10
+curl -H "Authorization: Bearer $TOKEN" "http://localhost:5251/api/stories/best?count=100" # max 100
 ```
 
 ### Using with Postman or Insomnia
 
-1. **Create a POST request** to `http://localhost:5000/api/auth/login`
+1. **Create a POST request** to `http://localhost:5251/api/auth/login`
 2. **Body**: Raw JSON with `{"username":"admin","password":"Test123!"}`
 3. **Copy the token** from the response
-4. **Create a GET request** to `http://localhost:5000/api/stories/best`
+4. **Create a GET request** to `http://localhost:5251/api/stories/best`
 5. **Add Authorization header**: `Bearer YOUR_TOKEN_HERE`
 
 ### Common Issues & Solutions
@@ -296,11 +326,13 @@ The application can be configured through `appsettings.json`:
 
 To prevent overloading the Hacker News API, the application implements:
 
-- **Memory Caching**: Stories and story IDs are cached for 5 minutes
-- **Cache Keys**: 
-  - `best_stories` for the list of best story IDs
-  - `story_{id}` for individual story details
-- **Cache Duration**: 5 minutes for all cached data
+- **In-Memory Database Caching**: Stories fetched from the Hacker News API are cached in an in-memory database (Entity Framework Core In-Memory Database)
+- **Cache Expiration**: Cached items expire after 5 minutes based on the `CachedAt` timestamp
+- **Cache Behavior**: 
+  - First request: Fetches from Hacker News API and stores in database
+  - Subsequent requests (within 5 minutes): Retrieves from database cache
+  - After expiration: Re-fetches from API and updates cache
+- **Item Types**: The API serves various item types (story, comment, ask, job, poll, pollopt), currently only stories are cached
 
 ## Assumptions
 
@@ -314,7 +346,7 @@ To prevent overloading the Hacker News API, the application implements:
 Given more time, the following enhancements could be implemented:
 
 ### Performance & Scalability
-1. **Distributed Caching**: Replace memory cache with Redis for better scalability
+1. **Distributed Caching**: Replace in-memory database with Redis for better scalability and persistence across multiple instances
 2. **Background Refresh**: Implement background jobs to refresh cache proactively
 3. **Connection Pooling**: Optimize HTTP client usage with connection pooling
 4. **Async Processing**: Implement streaming responses for large datasets
@@ -331,6 +363,12 @@ Given more time, the following enhancements could be implemented:
 3. **Search**: Implement full-text search capabilities
 4. **Real-time Updates**: Add WebSocket support for real-time story updates
 5. **Analytics**: Track usage patterns and popular stories
+6. **Additional Item Types**: Map and support other Hacker News item types beyond stories, including:
+   - Comments with nested threading
+   - Ask HN posts
+   - Jobs listings
+   - Polls and poll options
+   - Full item hierarchy and relationships
 
 ### Monitoring & Observability
 1. **Application Insights**: Integrate with Azure Application Insights

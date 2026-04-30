@@ -26,10 +26,10 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Authenticates a user and returns a JWT token
+    /// User login endpoint
     /// </summary>
-    /// <param name="loginRequest">Login credentials</param>
-    /// <returns>JWT token if authentication succeeds</returns>
+    /// <param name="loginRequest">User credentials</param>
+    /// <returns>JWT access token</returns>
     [HttpPost("login")]
     [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]

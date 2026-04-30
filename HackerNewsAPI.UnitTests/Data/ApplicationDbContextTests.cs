@@ -1,5 +1,6 @@
 using HackerNewsAPI.Infrastructure.Data;
 using HackerNewsAPI.Infrastructure.Entities;
+using HackerNewsAPI.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace HackerNewsAPI.Tests.Data;
@@ -20,7 +21,7 @@ public class ApplicationDbContextTests
         // Assert
         Assert.NotNull(context);
         Assert.NotNull(context.Users);
-        Assert.NotNull(context.Stories);
+        Assert.NotNull(context.Items);
     }
 
     [Fact]
@@ -60,26 +61,6 @@ public class ApplicationDbContextTests
     }
 
     [Fact]
-    public async Task ApplicationDbContext_SeedData_PopulatesStories()
-    {
-        // Arrange
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        // Act
-        using var context = new ApplicationDbContext(options);
-        context.Database.EnsureCreated();
-        var stories = await context.Stories.ToListAsync();
-
-        // Assert
-        Assert.NotNull(stories);
-        Assert.Equal(3, stories.Count);
-        Assert.All(stories, s => Assert.NotNull(s.Title));
-        Assert.All(stories, s => Assert.True(s.Score >= 0));
-    }
-
-    [Fact]
     public async Task ApplicationDbContext_CanAddUser()
     {
         // Arrange
@@ -111,7 +92,7 @@ public class ApplicationDbContextTests
     }
 
     [Fact]
-    public async Task ApplicationDbContext_CanAddStory()
+    public async Task ApplicationDbContext_CanAddItem()
     {
         // Arrange
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
@@ -122,24 +103,25 @@ public class ApplicationDbContextTests
         using var context = new ApplicationDbContext(options);
         context.Database.EnsureCreated();
         
-        var newStory = new StoryEntity
+        var newItem = new Item
         {
+            Id = 123,
+            By = "testuser",
             Title = "New Story",
-            Uri = "https://example.com/new",
-            PostedBy = "testuser",
-            Time = DateTime.UtcNow,
             Score = 100,
-            CommentCount = 10,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            Descendants = 10,
+            Time = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            Url = "https://example.com/new",
+            Type = ItemType.Story,
+            CachedAt = DateTime.UtcNow
         };
 
-        context.Stories.Add(newStory);
+        context.Items.Add(newItem);
         await context.SaveChangesAsync();
 
         // Assert
-        var addedStory = await context.Stories.FirstOrDefaultAsync(s => s.Title == "New Story");
-        Assert.NotNull(addedStory);
-        Assert.Equal("https://example.com/new", addedStory.Uri);
+        var addedItem = await context.Items.FirstOrDefaultAsync(i => i.Title == "New Story");
+        Assert.NotNull(addedItem);
+        Assert.Equal("https://example.com/new", addedItem.Url);
     }
 }

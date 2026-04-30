@@ -1,96 +1,139 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Caching.Memory;
-using HackerNewsAPI.Domain.Entities;
-using HackerNewsAPI.Domain.Interfaces;
-using System.Text.Json;
+using HackerNewsAPI.Infrastructure.Interfaces;
+using HackerNewsAPI.Infrastructure.Data;
+using HackerNewsAPI.Infrastructure.Entities;
 
 namespace HackerNewsAPI.Infrastructure.Repositories;
 
 public class HackerNewsRepository : IHackerNewsRepository
 {
-    private readonly HttpClient _httpClient;
+    private readonly ApplicationDbContext _context;
     private readonly ILogger<HackerNewsRepository> _logger;
-    private readonly IMemoryCache _cache;
+    private static readonly TimeSpan CacheExpiration = TimeSpan.FromMinutes(5);
 
-    private const string BestStoriesCacheKey = "best_stories";
-    private const string StoryCacheKeyPrefix = "story_";
-    private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
-
-    public HackerNewsRepository(HttpClient httpClient, ILogger<HackerNewsRepository> logger, IMemoryCache cache)
+    public HackerNewsRepository(ApplicationDbContext context, ILogger<HackerNewsRepository> logger)
     {
-        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _context = context ?? throw new ArgumentNullException(nameof(context));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _cache = cache ?? throw new ArgumentNullException(nameof(cache));
     }
 
-    public async Task<IEnumerable<int>> GetBestStoryIdsAsync(CancellationToken cancellationToken = default)
+    public async Task<Item?> GetItemByIdAsync(int itemId, CancellationToken cancellationToken = default)
     {
-        if (_cache.TryGetValue(BestStoriesCacheKey, out IEnumerable<int>? cachedIds))
-        {
-            _logger.LogDebug("Retrieved best story IDs from cache");
-            return cachedIds ?? Enumerable.Empty<int>();
-        }
-
         try
         {
-            _logger.LogDebug("Fetching best story IDs from Hacker News API");
-            var response = await _httpClient.GetAsync("https://hacker-news.firebaseio.com/v0/beststories.json", cancellationToken);
-            
-            response.EnsureSuccessStatusCode();
-            
-            var json = await response.Content.ReadAsStringAsync(cancellationToken);
-            var storyIds = JsonSerializer.Deserialize<IEnumerable<int>>(json) ?? Enumerable.Empty<int>();
-            
-            _cache.Set(BestStoriesCacheKey, storyIds, CacheDuration);
-            _logger.LogDebug("Successfully fetched and cached {Count} story IDs", storyIds.Count());
-            
-            return storyIds;
+            _logger.LogDebug("Retrieving item {ItemId} from database", itemId);
+            return await _context.Items.FindAsync(new object[] { itemId }, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error fetching best story IDs from Hacker News API");
+            _logger.LogError(ex, "Error retrieving item {ItemId} from database", itemId);
             throw;
         }
     }
 
-    public async Task<Story?> GetStoryDetailsAsync(int storyId, CancellationToken cancellationToken = default)
+    public async Task AddOrUpdateItemAsync(Item item, CancellationToken cancellationToken = default)
     {
-        var cacheKey = $"{StoryCacheKeyPrefix}{storyId}";
-        
-        if (_cache.TryGetValue(cacheKey, out Story? cachedStory))
-        {
-            _logger.LogDebug("Retrieved story {StoryId} from cache", storyId);
-            return cachedStory;
-        }
-
         try
         {
-            _logger.LogDebug("Fetching story {StoryId} details from Hacker News API", storyId);
-            var response = await _httpClient.GetAsync($"https://hacker-news.firebaseio.com/v0/item/{storyId}.json", cancellationToken);
+            item.CachedAt = DateTime.UtcNow;
             
-            if (!response.IsSuccessStatusCode)
+            var existingItem = await _context.Items.FindAsync(new object[] { item.Id }, cancellationToken);
+            
+            if (existingItem != null)
             {
-                _logger.LogWarning("Failed to fetch story {StoryId}: {StatusCode}", storyId, response.StatusCode);
-                return null;
+                _logger.LogDebug("Updating item {ItemId} in database", item.Id);
+                _context.Entry(existingItem).CurrentValues.SetValues(item);
+            }
+            else
+            {
+                _logger.LogDebug("Adding new item {ItemId} to database", item.Id);
+                _context.Items.Add(item);
             }
             
-            var json = await response.Content.ReadAsStringAsync(cancellationToken);
-            var story = JsonSerializer.Deserialize<Story>(json, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            });
-            
-            if (story != null)
-            {
-                _cache.Set(cacheKey, story, CacheDuration);
-                _logger.LogDebug("Successfully fetched and cached story {StoryId}", storyId);
-            }
-            
-            return story;
+            await _context.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error fetching story {StoryId} details from Hacker News API", storyId);
+            _logger.LogError(ex, "Error adding or updating item {ItemId} in database", item.Id);
+            throw;
+        }
+    }
+
+    public async Task AddOrUpdateItemsAsync(IEnumerable<Item> items, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            foreach (var item in items)
+            {
+                item.CachedAt = DateTime.UtcNow;
+                
+                var existingItem = await _context.Items.FindAsync(new object[] { item.Id }, cancellationToken);
+                
+                if (existingItem != null)
+                {
+                    _logger.LogDebug("Updating item {ItemId} in database", item.Id);
+                    _context.Entry(existingItem).CurrentValues.SetValues(item);
+                }
+                else
+                {
+                    _logger.LogDebug("Adding new item {ItemId} to database", item.Id);
+                    _context.Items.Add(item);
+                }
+            }
+            
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding or updating items in database");
+            throw;
+        }
+    }
+
+    public async Task<bool> IsItemExpiredAsync(int itemId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var item = await _context.Items.FindAsync(new object[] { itemId }, cancellationToken);
+            
+            if (item == null)
+            {
+                return true;
+            }
+            
+            var isExpired = DateTime.UtcNow - item.CachedAt > CacheExpiration;
+            
+            if (isExpired)
+            {
+                _logger.LogDebug("Item {ItemId} is expired (cached at {CachedAt})", itemId, item.CachedAt);
+            }
+            
+            return isExpired;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error checking if item {ItemId} is expired", itemId);
+            throw;
+        }
+    }
+
+    public async Task<Dictionary<int, bool>> CheckItemsExpiredAsync(IEnumerable<int> itemIds, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var items = await _context.Items
+                .Where(i => itemIds.Contains(i.Id))
+                .ToDictionaryAsync(i => i.Id, i => i, cancellationToken);
+            
+            return itemIds.ToDictionary(
+                id => id, 
+                id => !items.ContainsKey(id) || DateTime.UtcNow - items[id].CachedAt > CacheExpiration
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error checking batch expiration for items");
             throw;
         }
     }

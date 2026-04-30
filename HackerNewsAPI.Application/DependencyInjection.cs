@@ -5,6 +5,7 @@ using HackerNewsAPI.Application.Interfaces;
 using HackerNewsAPI.Application.Services;
 using HackerNewsAPI.Domain.Interfaces;
 using HackerNewsAPI.Infrastructure.Repositories;
+using HackerNewsAPI.Infrastructure.Interfaces;
 using HackerNewsAPI.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -24,12 +25,13 @@ public static class DependencyInjection
         // Register Infrastructure services
         services.AddMemoryCache();
         
-        // Register HttpClient for Hacker News API
-        services.AddHttpClient<IHackerNewsRepository, HackerNewsRepository>(client =>
+        // Register HttpClient for Hacker News API service
+        services.AddHttpClient<IHackerNewsApiService, HackerNewsApiService>(client =>
         {
             client.BaseAddress = new Uri("https://hacker-news.firebaseio.com/");
             client.Timeout = TimeSpan.FromSeconds(30);
         });
+        services.AddHostedService<CacheRefreshService>();
 
         // Register DbContext with InMemory database
         services.AddDbContext<ApplicationDbContext>(options =>
@@ -42,6 +44,7 @@ public static class DependencyInjection
 
         // Register repositories
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IHackerNewsRepository, HackerNewsRepository>();
 
         // Create a scope to seed the database
         var serviceProvider = services.BuildServiceProvider();

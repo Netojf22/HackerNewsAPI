@@ -1,11 +1,10 @@
-using MediatR;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.TestHost;
-using System.Security.Claims;
-using HackerNewsAPI.Application.Queries;
+using HackerNewsAPI.Application.Interfaces;
 using HackerNewsAPI.Domain.ValueObjects;
+using HackerNewsAPI.Domain.Entities;
 using Moq;
 using System.Net;
 using System.Text.Json;
@@ -15,16 +14,16 @@ namespace HackerNewsAPI.Tests.Controllers;
 public class StoriesControllerTests : IClassFixture<WebApplicationFactory<Program>>
 {
     private readonly WebApplicationFactory<Program> _factory;
-    private readonly Mock<IMediator> _mockMediator;
+    private readonly Mock<IStoryService> _mockStoryService;
 
     public StoriesControllerTests(WebApplicationFactory<Program> factory)
     {
-        _mockMediator = new Mock<IMediator>();
+        _mockStoryService = new Mock<IStoryService>();
         _factory = factory.WithWebHostBuilder(builder =>
         {
             builder.ConfigureServices(services =>
             {
-                services.AddSingleton(_mockMediator.Object);
+                services.AddSingleton(_mockStoryService.Object);
                 // Configure test authentication
                 services.AddAuthentication(options =>
                 {
@@ -45,7 +44,7 @@ public class StoriesControllerTests : IClassFixture<WebApplicationFactory<Progra
             new() { Title = "Story 2", Uri = "https://example.com/2", PostedBy = "user2", Time = DateTime.UtcNow, Score = 200, CommentCount = 20 }
         };
 
-        _mockMediator.Setup(m => m.Send(It.IsAny<GetBestStoriesQuery>(), It.IsAny<CancellationToken>()))
+        _mockStoryService.Setup(s => s.GetBestStoriesAsync(10, It.IsAny<CancellationToken>()))
             .ReturnsAsync(expectedStories);
 
         var client = _factory.CreateClient();
@@ -80,7 +79,7 @@ public class StoriesControllerTests : IClassFixture<WebApplicationFactory<Progra
             new() { Title = "Story 1", Uri = "https://example.com/1", PostedBy = "user1", Time = DateTime.UtcNow, Score = 100, CommentCount = 10 }
         };
 
-        _mockMediator.Setup(m => m.Send(It.IsAny<GetBestStoriesQuery>(), It.IsAny<CancellationToken>()))
+        _mockStoryService.Setup(s => s.GetBestStoriesAsync(5, It.IsAny<CancellationToken>()))
             .ReturnsAsync(expectedStories);
 
         var client = _factory.CreateClient();
@@ -94,7 +93,7 @@ public class StoriesControllerTests : IClassFixture<WebApplicationFactory<Progra
         response.EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        _mockMediator.Verify(m => m.Send(It.Is<GetBestStoriesQuery>(q => q.Count == 5), It.IsAny<CancellationToken>()), Times.Once);
+        _mockStoryService.Verify(s => s.GetBestStoriesAsync(5, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -143,11 +142,11 @@ public class StoriesControllerTests : IClassFixture<WebApplicationFactory<Progra
     }
 
     [Fact]
-    public async Task GetBestStories_WhenMediatorThrowsException_ReturnsInternalServerError()
+    public async Task GetBestStories_WhenServiceThrowsException_ReturnsInternalServerError()
     {
         // Arrange
-        _mockMediator.Setup(m => m.Send(It.IsAny<GetBestStoriesQuery>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new InvalidOperationException("Mediator error"));
+        _mockStoryService.Setup(s => s.GetBestStoriesAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Service error"));
 
         var client = _factory.CreateClient();
         // Set up authenticated request
@@ -169,7 +168,7 @@ public class StoriesControllerTests : IClassFixture<WebApplicationFactory<Progra
             new() { Title = "Story 1", Uri = "https://example.com/1", PostedBy = "user1", Time = DateTime.UtcNow, Score = 100, CommentCount = 10 }
         };
 
-        _mockMediator.Setup(m => m.Send(It.IsAny<GetBestStoriesQuery>(), It.IsAny<CancellationToken>()))
+        _mockStoryService.Setup(s => s.GetBestStoriesAsync(100, It.IsAny<CancellationToken>()))
             .ReturnsAsync(expectedStories);
 
         var client = _factory.CreateClient();
@@ -183,7 +182,7 @@ public class StoriesControllerTests : IClassFixture<WebApplicationFactory<Progra
         response.EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        _mockMediator.Verify(m => m.Send(It.Is<GetBestStoriesQuery>(q => q.Count == 100), It.IsAny<CancellationToken>()), Times.Once);
+        _mockStoryService.Verify(s => s.GetBestStoriesAsync(100, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -196,6 +195,79 @@ public class StoriesControllerTests : IClassFixture<WebApplicationFactory<Progra
 
         // Act
         var response = await client.GetAsync("/api/stories/best");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetStoryById_WithValidId_ReturnsOkResult()
+    {
+        // Arrange
+        var storyId = 123;
+        var expectedStory = new Story
+        {
+            Title = "Test Story",
+            Uri = "https://example.com/test",
+            PostedBy = "testuser",
+            Time = DateTime.UtcNow,
+            Score = 100,
+            CommentCount = 25
+        };
+
+        _mockStoryService.Setup(s => s.GetStoryByIdAsync(storyId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedStory);
+
+        var client = _factory.CreateClient();
+        // Set up authenticated request
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Test");
+
+        // Act
+        var response = await client.GetAsync($"/api/stories/{storyId}");
+
+        // Assert
+        response.EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var content = await response.Content.ReadAsStringAsync();
+        var story = JsonSerializer.Deserialize<Story>(content, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        });
+
+        Assert.NotNull(story);
+        Assert.Equal("Test Story", story.Title);
+    }
+
+    [Fact]
+    public async Task GetStoryById_WithInvalidId_ReturnsNotFound()
+    {
+        // Arrange
+        var storyId = 999;
+        _mockStoryService.Setup(s => s.GetStoryByIdAsync(storyId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Story?)null);
+
+        var client = _factory.CreateClient();
+        // Set up authenticated request
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Test");
+
+        // Act
+        var response = await client.GetAsync($"/api/stories/{storyId}");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetStoryById_WithoutAuthentication_ReturnsUnauthorized()
+    {
+        // Arrange
+        var unauthorizedFactory = new WebApplicationFactory<Program>();
+        var client = unauthorizedFactory.CreateClient();
+        // No authorization header set
+
+        // Act
+        var response = await client.GetAsync("/api/stories/123");
 
         // Assert
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);

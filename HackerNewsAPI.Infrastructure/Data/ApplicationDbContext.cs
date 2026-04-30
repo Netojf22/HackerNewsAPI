@@ -11,13 +11,13 @@ public class ApplicationDbContext : DbContext
     }
 
     public DbSet<UserEntity> Users { get; set; }
-    public DbSet<StoryEntity> Stories { get; set; }
+    public DbSet<Item> Items { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
         
         modelBuilder.ApplyConfiguration(new UserEntityConfiguration());
-        modelBuilder.ApplyConfiguration(new StoryEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new ItemConfiguration());
     }
 }

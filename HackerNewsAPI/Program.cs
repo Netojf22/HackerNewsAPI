@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using HackerNewsAPI.Application;
+using Microsoft.OpenApi.Models;
 
 public class Program
 {
@@ -14,7 +15,33 @@ public class Program
         builder.Services.AddOpenApi();
 
         // Add Swagger services
-        builder.Services.AddSwaggerGen();
+        builder.Services.AddSwaggerGen(c =>
+        {
+            c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+            {
+                Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
+                Name = "Authorization",
+                In = ParameterLocation.Header,
+                Type = SecuritySchemeType.Http,
+                Scheme = "bearer",
+                BearerFormat = "JWT"
+            });
+
+            c.AddSecurityRequirement(new OpenApiSecurityRequirement
+            {
+                {
+                    new OpenApiSecurityScheme
+                    {
+                        Reference = new OpenApiReference
+                        {
+                            Type = ReferenceType.SecurityScheme,
+                            Id = "Bearer"
+                        }
+                    },
+                    Array.Empty<string>()
+                }
+            });
+        });
 
         // Configure JWT Authentication
         var jwtSettings = builder.Configuration.GetSection("JwtSettings");
@@ -69,8 +96,8 @@ public class Program
 
         app.UseHttpsRedirection();
         
-        app.UseAuthentication();
         app.UseRouting();
+        app.UseAuthentication();
         app.UseAuthorization();
         
         app.MapControllers();
