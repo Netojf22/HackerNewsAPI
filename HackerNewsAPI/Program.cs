@@ -13,6 +13,9 @@ public class Program
         builder.Services.AddControllers();
         builder.Services.AddOpenApi();
 
+        // Add Swagger services
+        builder.Services.AddSwaggerGen();
+
         // Configure JWT Authentication
         var jwtSettings = builder.Configuration.GetSection("JwtSettings");
         var secretKey = jwtSettings["SecretKey"] ?? "YourDefaultSecretKeyThatShouldBeAtLeast32CharactersLong!";
@@ -54,6 +57,14 @@ public class Program
         {
             app.MapOpenApi();
             app.UseDeveloperExceptionPage();
+            
+            // Enable Swagger UI
+            app.UseSwagger();
+            app.UseSwaggerUI(c =>
+            {
+                c.SwaggerEndpoint("/swagger/v1/swagger.json", "HackerNews API V1");
+                c.RoutePrefix = "swagger"; // Set Swagger UI at /swagger
+            });
         }
 
         app.UseHttpsRedirection();
