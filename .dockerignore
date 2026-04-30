@@ -1,0 +1,97 @@
+# .NET build artifacts
+**/[Bb]in/
+**/[Oo]bj/
+**/*.dll
+**/*.exe
+**/*.pdb
+**/*.cache
+**/*.user
+**/*.userosscache
+**/*.suo
+**/*.vspscc
+**/*.vssscc
+**/*.vscode/
+
+# Visual Studio Code
+.vscode/
+
+# Visual Studio
+.vs/
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Mono auto generated files
+mono_crash.*
+
+# Windows image file caches
+Thumbs.db
+ehthumbs.db
+
+# Folder config file
+Desktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+# Mac
+.DS_Store
+
+# Linux
+*~
+
+# IntelliJ IDEA
+.idea/
+*.iml
+
+# NuGet packages
+**/packages/*
+!**/packages/build/
+**/*.nupkg
+
+# ASP.NET Core
+**/appsettings.Development.json
+**/appsettings.Local.json
+
+# Testing
+**/TestResults/
+**/coverage/
+**/*.trx
+**/*.coverage
+**/*.coveragexml
+
+# Logs
+**/logs/
+**/*.log
+
+# Docker
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+
+# Scripts
+scripts/
+
+# Tools and configurations
+tools/
+*.ps1
+*.sh
+*.bat
+
+# Environment files
+.env
+.env.*
+!.env.example

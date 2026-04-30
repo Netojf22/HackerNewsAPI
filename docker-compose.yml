@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  hackernewsapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: final
+    container_name: hackernews-api
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - JwtSettings__SecretKey=YourSuperSecretKeyForDevelopmentThatShouldBeAtLeast32CharactersLong!
+      - JwtSettings__Issuer=HackerNewsAPI-Dev
+      - JwtSettings__Audience=HackerNewsAPI-Dev
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - hackernews-network
+    restart: unless-stopped
+
+  # Optional: Add a reverse proxy for production-like setup
+  nginx:
+    image: nginx:alpine
+    container_name: hackernews-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - hackernewsapi
+    networks:
+      - hackernews-network
+    profiles:
+      - production
+    restart: unless-stopped
+
+networks:
+  hackernews-network:
+    driver: bridge
+
+volumes:
+  logs:
+    driver: local
